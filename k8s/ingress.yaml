@@ -1,0 +1,24 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: dk-bridge-mcp
+  namespace: mcp
+  annotations:
+    cert-manager.io/cluster-issuer: lan-ca
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - dk-bridge.home.arpa
+      secretName: dk-bridge-mcp-tls
+  rules:
+    - host: dk-bridge.home.arpa
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: dk-bridge-mcp
+                port:
+                  number: 80

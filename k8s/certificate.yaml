@@ -1,0 +1,12 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: dk-bridge-mcp-tls
+  namespace: mcp
+spec:
+  secretName: dk-bridge-mcp-tls
+  dnsNames:
+    - dk-bridge.home.arpa
+  issuerRef:
+    kind: ClusterIssuer
+    name: lan-ca

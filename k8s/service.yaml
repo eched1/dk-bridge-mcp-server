@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: dk-bridge-mcp
+  namespace: mcp
+spec:
+  type: ClusterIP
+  selector:
+    app: dk-bridge-mcp
+  ports:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: 3847

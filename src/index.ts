@@ -3,12 +3,14 @@
  * DK Bridge MCP Server
  *
  * Shared task queue bridging Cowork and Claude Code.
- * Both environments connect via stdio transport.
- * Tasks persist in ~/.dk-infraedge/bridge-tasks.json.
+ * Supports stdio (local) and HTTP/SSE (remote/k8s) transports.
+ * Tasks persist in ~/.dk-infraedge/bridge-tasks.json (or BRIDGE_STORE_PATH).
  */
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import express from "express";
 import { z } from "zod";
 import {
   createTask,
@@ -108,12 +110,18 @@ function formatTaskSummary(task: Task): string {
   return `[${task.id}] ${task.priority.toUpperCase()} | ${task.status.padEnd(11)} | ${task.title}${assignee}`;
 }
 
-// ── Server Setup ───────────────────────────────────────────────────────────
+// ── Server Factory ─────────────────────────────────────────────────────────
 
-const server = new McpServer({
-  name: "dk-bridge-mcp-server",
-  version: "1.0.0",
-});
+function createServer(): McpServer {
+  const server = new McpServer({
+    name: "dk-bridge-mcp-server",
+    version: "1.0.0",
+  });
+  registerTools(server);
+  return server;
+}
+
+function registerTools(server: McpServer): void {
 
 // ── Tool: bridge_create_task ───────────────────────────────────────────────
 
@@ -488,16 +496,114 @@ Returns: Dashboard overview with stats and highlights.`,
   }
 );
 
-// ── Main ───────────────────────────────────────────────────────────────────
+} // end registerTools
 
-async function main(): Promise<void> {
+// ── HTTP mode (k8s / remote) ──────────────────────────────────────────────
+
+async function startHttp(): Promise<void> {
+  const app = express();
+  const PORT = parseInt(process.env.PORT || "3847", 10);
+  const MCP_API_KEY = process.env.MCP_API_KEY;
+
+  if (!MCP_API_KEY) {
+    console.error("MCP_API_KEY is required in HTTP mode");
+    process.exit(1);
+  }
+
+  // Auth middleware — skip /healthz
+  app.use((req, res, next) => {
+    if (req.path === "/healthz") return next();
+
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      res.status(401).json({ error: "Missing or invalid Authorization header" });
+      return;
+    }
+    if (authHeader.slice(7) !== MCP_API_KEY) {
+      res.status(401).json({ error: "Invalid API key" });
+      return;
+    }
+    next();
+  });
+
+  // Session tracking
+  const transports = new Map<string, StreamableHTTPServerTransport>();
+
+  app.post("/mcp", async (req, res) => {
+    const sessionId = req.headers["mcp-session-id"] as string | undefined;
+
+    if (sessionId && transports.has(sessionId)) {
+      await transports.get(sessionId)!.handleRequest(req, res);
+      return;
+    }
+
+    const server = createServer();
+    const transport = new StreamableHTTPServerTransport({
+      sessionIdGenerator: () => crypto.randomUUID(),
+    });
+
+    transport.onclose = () => {
+      const sid = transport.sessionId;
+      if (sid) transports.delete(sid);
+    };
+
+    await server.connect(transport);
+    await transport.handleRequest(req, res);
+
+    if (transport.sessionId) {
+      transports.set(transport.sessionId, transport);
+    }
+  });
+
+  app.get("/mcp", async (req, res) => {
+    const sessionId = req.headers["mcp-session-id"] as string | undefined;
+    if (!sessionId || !transports.has(sessionId)) {
+      res.status(400).json({ error: "Invalid or missing session ID" });
+      return;
+    }
+    await transports.get(sessionId)!.handleRequest(req, res);
+  });
+
+  app.delete("/mcp", async (req, res) => {
+    const sessionId = req.headers["mcp-session-id"] as string | undefined;
+    if (!sessionId || !transports.has(sessionId)) {
+      res.status(400).json({ error: "Invalid or missing session ID" });
+      return;
+    }
+    await transports.get(sessionId)!.handleRequest(req, res);
+  });
+
+  app.get("/healthz", (_req, res) => {
+    res.json({ status: "ok", service: "dk-bridge-mcp-server", mode: "http" });
+  });
+
+  app.listen(PORT, () => {
+    console.log(`DK Bridge MCP server listening on :${PORT} (HTTP mode)`);
+    console.log(`Store: ${process.env.BRIDGE_STORE_PATH || `${process.env.HOME}/.dk-infraedge/bridge-tasks.json`}`);
+  });
+}
+
+// ── Stdio mode (local Claude Code) ───────────────────────────────────────
+
+async function startStdio(): Promise<void> {
+  const server = createServer();
   const transport = new StdioServerTransport();
   await server.connect(transport);
   console.error("DK Bridge MCP server running via stdio");
-  console.error(`Store path: ${process.env.BRIDGE_STORE_PATH || `${process.env.HOME}/.dk-infraedge/bridge-tasks.json`}`);
 }
 
-main().catch((error) => {
-  console.error("Fatal error:", error);
-  process.exit(1);
-});
+// ── Entrypoint ───────────────────────────────────────────────────────────
+
+const mode = process.env.MCP_TRANSPORT || "stdio";
+
+if (mode === "http") {
+  startHttp().catch((err) => {
+    console.error("Fatal error:", err);
+    process.exit(1);
+  });
+} else {
+  startStdio().catch((err) => {
+    console.error("Fatal error:", err);
+    process.exit(1);
+  });
+}
