@@ -94,25 +94,46 @@ export function formatSlackPayload(payload: WebhookPayload): object {
   const emoji = priorityEmoji[payload.task.priority] || ":memo:";
   const label = eventLabels[payload.event] || payload.event;
 
-  return {
-    text: `${emoji} [${payload.event.toUpperCase()}] ${payload.task.title}`,
-    blocks: [
-      {
-        type: "header",
-        text: {
-          type: "plain_text",
-          text: `${label}: ${payload.task.title}`,
-        },
+  const blocks: object[] = [
+    {
+      type: "header",
+      text: {
+        type: "plain_text",
+        text: `${label}: ${payload.task.title}`,
       },
+    },
+    {
+      type: "section",
+      fields: [
+        { type: "mrkdwn", text: `*Priority:* ${emoji} ${payload.task.priority}` },
+        { type: "mrkdwn", text: `*Source:* ${payload.source}` },
+        { type: "mrkdwn", text: `*Status:* ${payload.task.status}` },
+        { type: "mrkdwn", text: `*ID:* \`${payload.task.id}\`` },
+      ],
+    },
+  ];
+
+  if (payload.task.description) {
+    blocks.push(
+      { type: "divider" },
       {
         type: "section",
-        fields: [
-          { type: "mrkdwn", text: `*Priority:* ${emoji} ${payload.task.priority}` },
-          { type: "mrkdwn", text: `*Source:* ${payload.source}` },
-          { type: "mrkdwn", text: `*Status:* ${payload.task.status}` },
-          { type: "mrkdwn", text: `*ID:* \`${payload.task.id}\`` },
-        ],
-      },
-    ],
+        text: { type: "mrkdwn", text: payload.task.description },
+      }
+    );
+  }
+
+  if (payload.task.tags.length > 0) {
+    blocks.push({
+      type: "context",
+      elements: [
+        { type: "mrkdwn", text: payload.task.tags.map((t) => `\`${t}\``).join("  ") },
+      ],
+    });
+  }
+
+  return {
+    text: `${emoji} ${label}: ${payload.task.title}`,
+    blocks,
   };
 }
