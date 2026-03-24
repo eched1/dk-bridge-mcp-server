@@ -1,0 +1,18 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: dk-bridge-mcp
+  namespace: mcp
+  labels:
+    release: kube-prometheus-stack
+spec:
+  namespaceSelector:
+    matchNames:
+      - mcp
+  selector:
+    matchLabels:
+      app: dk-bridge-mcp
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 30s

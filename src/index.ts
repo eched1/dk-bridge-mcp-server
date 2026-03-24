@@ -10,6 +10,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { registerTaskTools } from "./tools/tasks.js";
 import { registerWebhookTools } from "./tools/webhooks.js";
+import { loadStore } from "./services/store.js";
 import express from "express";
 
 function createServer(): McpServer {
@@ -41,6 +42,35 @@ async function main(): Promise<void> {
     // Health check
     app.get("/healthz", (_req, res) => {
       res.json({ status: "ok", version: "2.0.0", transport: "http" });
+    });
+
+    // Prometheus metrics endpoint for bridge task queue
+    app.get("/metrics", (_req, res) => {
+      const store = loadStore();
+      const statuses = ["pending", "in_progress", "completed", "blocked", "cancelled"];
+      const priorities = ["critical", "high", "medium", "low"];
+      const lines: string[] = [
+        "# HELP bridge_tasks_total Total tasks by status",
+        "# TYPE bridge_tasks_total gauge",
+        ...statuses.map((s) => {
+          const count = store.tasks.filter((t: any) => t.status === s).length;
+          return `bridge_tasks_total{status="${s}"} ${count}`;
+        }),
+        "# HELP bridge_tasks_by_priority Tasks by priority",
+        "# TYPE bridge_tasks_by_priority gauge",
+        ...priorities.map((p) => {
+          const count = store.tasks.filter((t: any) => t.priority === p && t.status !== "completed" && t.status !== "cancelled").length;
+          return `bridge_tasks_by_priority{priority="${p}"} ${count}`;
+        }),
+        "# HELP bridge_tasks_active Active (pending + in_progress) task count",
+        "# TYPE bridge_tasks_active gauge",
+        `bridge_tasks_active ${store.tasks.filter((t: any) => t.status === "pending" || t.status === "in_progress").length}`,
+        "# HELP bridge_webhooks_total Configured webhooks",
+        "# TYPE bridge_webhooks_total gauge",
+        `bridge_webhooks_total ${(store.webhooks || []).length}`,
+      ];
+      res.set("Content-Type", "text/plain; version=0.0.4");
+      res.send(lines.join("\n") + "\n");
     });
 
     // Session tracking

@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: mcp-server
-          image: dk-bridge-mcp:v2.0.1
+          image: dk-bridge-mcp:v2.1.0
           imagePullPolicy: Never
           env:
             - name: MCP_TRANSPORT
@@ -59,4 +59,5 @@ spec:
               mountPath: /data
       volumes:
         - name: data
-          emptyDir: {}
+          persistentVolumeClaim:
+            claimName: dk-bridge-mcp-data
