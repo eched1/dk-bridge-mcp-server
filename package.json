@@ -1,30 +1,23 @@
 {
   "name": "dk-bridge-mcp-server",
-  "version": "1.0.0",
-  "description": "MCP server bridging Cowork and Claude Code via a shared file-based task queue",
+  "version": "2.0.0",
+  "description": "Cowork <-> Claude Code task bridge with event-driven webhook notifications",
   "type": "module",
   "main": "dist/index.js",
-  "bin": {
-    "dk-bridge-mcp-server": "dist/index.js"
-  },
   "scripts": {
-    "start": "node dist/index.js",
-    "dev": "tsx watch src/index.ts",
     "build": "tsc",
-    "clean": "rm -rf dist"
-  },
-  "engines": {
-    "node": ">=18"
+    "dev": "tsx src/index.ts",
+    "watcher": "node watcher/bridge-watcher.js"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.6.1",
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "@types/express": "^5.0.6",
     "express": "^5.2.1",
-    "zod": "^3.23.8"
+    "zod": "^3.23.0"
   },
   "devDependencies": {
-    "@types/express": "^5.0.6",
-    "@types/node": "^22.10.0",
-    "tsx": "^4.19.2",
-    "typescript": "^5.7.2"
+    "@types/node": "^20.14.0",
+    "tsx": "^4.16.0",
+    "typescript": "^5.5.0"
   }
 }

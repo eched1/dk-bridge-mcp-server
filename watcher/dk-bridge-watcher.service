@@ -1,0 +1,27 @@
+[Unit]
+Description=DK Bridge Task Watcher
+Documentation=https://github.com/eched1/dkInfraedge
+After=network.target
+
+[Service]
+Type=simple
+User=echezona
+WorkingDirectory=/home/echezona/.dk-infraedge
+ExecStart=/usr/bin/node /home/echezona/.local/share/dk-infraedge/servers/dk-bridge-mcp-server/watcher/bridge-watcher.js
+
+# Notification channels — uncomment and configure as needed
+Environment=BRIDGE_STORE_PATH=/home/echezona/.dk-infraedge/bridge-tasks.json
+Environment=POLL_INTERVAL=5000
+Environment=DESKTOP_NOTIFY=true
+#Environment=SLACK_WEBHOOK_URL=  # Set to your Slack incoming webhook URL
+#Environment=CLAUDE_CODE_AUTO=true
+#Environment=CLAUDE_CODE_PROJECT=/home/echezona/projects/dk-infraedge
+
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=dk-bridge-watcher
+
+[Install]
+WantedBy=multi-user.target

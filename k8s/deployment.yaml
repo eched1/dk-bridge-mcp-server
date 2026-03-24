@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: mcp-server
-          image: dk-bridge-mcp:latest
+          image: dk-bridge-mcp:v2.0.1
           imagePullPolicy: Never
           env:
             - name: MCP_TRANSPORT
