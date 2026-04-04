@@ -73,6 +73,31 @@ async function main(): Promise<void> {
       res.send(lines.join("\n") + "\n");
     });
 
+    // REST: task list for ops dashboard
+    app.get("/api/tasks", (req, res) => {
+      if (apiKey) {
+        const auth = req.headers.authorization;
+        if (!auth || auth !== `Bearer ${apiKey}`) {
+          res.status(401).json({ error: "Unauthorized" });
+          return;
+        }
+      }
+      const store = loadStore();
+      const recent = [...store.tasks]
+        .sort((a: any, b: any) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+        .slice(0, 10);
+      res.json({
+        counts: {
+          pending: store.tasks.filter((t: any) => t.status === "pending").length,
+          in_progress: store.tasks.filter((t: any) => t.status === "in_progress").length,
+          completed: store.tasks.filter((t: any) => t.status === "completed").length,
+          blocked: store.tasks.filter((t: any) => t.status === "blocked").length,
+        },
+        recent,
+        lastSync: store.lastSync,
+      });
+    });
+
     // Session tracking
     const sessions = new Map<string, { transport: StreamableHTTPServerTransport; server: McpServer }>();
 
